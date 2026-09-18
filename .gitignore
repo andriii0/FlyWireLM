@@ -1,0 +1,13 @@
+.venv/
+.idea/
+datasets/raw/
+datasets/corpora/
+datasets/processed/
+benchmark/results/
+artifacts/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
