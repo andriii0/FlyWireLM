@@ -39,6 +39,7 @@ def parse_config(argv: list[str] | None = None) -> TrainingConfig:
     parser.add_argument("--bptt", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--max-steps", type=int, default=2000)
+    parser.add_argument("--checkpoint-every", type=int, default=0)
     parser.add_argument("--target-accuracy", type=float, default=0.995)
     parser.add_argument(
         "--target-generation-accuracy",

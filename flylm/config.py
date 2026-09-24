@@ -25,6 +25,7 @@ class TrainingConfig:
     bptt: int = 32
     learning_rate: float = 1e-3
     max_steps: int = 2000
+    checkpoint_every: int = 0
     target_accuracy: float = 0.995
     target_generation_accuracy: float = 0.95
     log_every: int = 20
@@ -49,6 +50,8 @@ class TrainingConfig:
             raise ValueError("validation_bytes cannot be negative")
         if self.generation_length < 0:
             raise ValueError("generation_length cannot be negative")
+        if self.checkpoint_every < 0:
+            raise ValueError("checkpoint_every cannot be negative")
 
     def as_dict(self) -> dict[str, object]:
         values = asdict(self)

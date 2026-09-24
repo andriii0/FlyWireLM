@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 import time
 from pathlib import Path
 
@@ -55,6 +56,13 @@ def train_step(
     optimizer.step()
     accuracy = (logits.argmax(dim=-1) == targets).float().mean()
     return float(loss.detach()), float(accuracy.detach()), state.detach()
+
+
+def print_generation(generation: bytes) -> None:
+    text = generation.decode("utf-8", errors="replace")
+    encoding = sys.stdout.encoding or "utf-8"
+    safe_text = text.encode(encoding, errors="backslashreplace").decode(encoding)
+    print(safe_text, flush=True)
 
 
 @torch.no_grad()
@@ -151,6 +159,19 @@ class FlyLmTrainer:
             if step == 1 or step % self.config.log_every == 0:
                 self._log_step(log_path, step, loss, accuracy)
 
+            if (
+                self.config.checkpoint_every
+                and step % self.config.checkpoint_every == 0
+                and step < self.config.max_steps
+            ):
+                self._save_progress_checkpoint(
+                    step,
+                    loss,
+                    accuracy,
+                    started,
+                    bytes_seen,
+                )
+
             if self.config.corpus is None and accuracy >= self.config.target_accuracy:
                 if self._tiny_overfit_succeeded(
                     step,
@@ -164,7 +185,6 @@ class FlyLmTrainer:
         metrics = self._timing_metrics(started, bytes_seen)
         metrics.update(self._validation_metrics())
         generated, generation_accuracy = self._final_generation()
-        print(generated.decode("utf-8", errors="replace"), flush=True)
         self._save_checkpoint(
             self.config.max_steps,
             loss,
@@ -173,6 +193,7 @@ class FlyLmTrainer:
             generation_accuracy,
             metrics,
         )
+        print_generation(generated)
         if self.config.corpus is None:
             raise RuntimeError(
                 "tiny overfit did not reach "
@@ -257,11 +278,8 @@ class FlyLmTrainer:
             len(TINY_PATTERN) * 4,
         )
         generated_accuracy = generation_match(generated)
-        print(
-            f"generation_accuracy={generated_accuracy:.4f}\n"
-            f"{generated.decode('utf-8', errors='replace')}",
-            flush=True,
-        )
+        print(f"generation_accuracy={generated_accuracy:.4f}", flush=True)
+        print_generation(generated)
         if generated_accuracy < self.config.target_generation_accuracy:
             return False
 
@@ -362,3 +380,38 @@ class FlyLmTrainer:
             json.dumps(config, indent=2),
             encoding="utf-8",
         )
+
+    def _save_progress_checkpoint(
+        self,
+        step: int,
+        loss: float,
+        accuracy: float,
+        started: float,
+        bytes_seen: int,
+    ) -> None:
+        config = self.config.as_dict()
+        config.update(
+            {
+                "initialized_from": (
+                    str(self.config.checkpoint)
+                    if self.config.checkpoint is not None
+                    else None
+                ),
+                "step": step,
+                "loss": loss,
+                "accuracy": accuracy,
+            }
+        )
+        config.update(self._timing_metrics(started, bytes_seen))
+        checkpoint_path = (
+            self.config.output_dir / f"checkpoint_step_{step:06d}.pt"
+        )
+        torch.save(
+            {
+                "model": self.model.state_dict(),
+                "optimizer": self.optimizer.state_dict(),
+                "config": config,
+            },
+            checkpoint_path,
+        )
+        print(f"saved checkpoint {checkpoint_path}", flush=True)
